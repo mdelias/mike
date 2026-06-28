@@ -1,18 +1,288 @@
-\"use client\";
+"use client";
 
-import { useEffect, useState } from \"react\";
-import { Eye, EyeOff } from \"lucide-react\";
-import { Input } from \"@/components/ui/input\";
-import { useUserProfile } from \"@/contexts/UserProfileContext\";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 import {
     MfaVerificationPopup,
     needsMfaVerification,
-} from \"@/app/components/shared/MfaVerificationPopup\";
-import { isMfaRequiredError } from \"@/app/lib/mikeApi\";
+} from "@/app/components/shared/MfaVerificationPopup";
+import { isMfaRequiredError } from "@/app/lib/mikeApi";
 import {
     accountGlassIconButtonClassName,
     accountGlassInputClassName,
-} from \"../accountStyles\";
-import { AccountSection } from \"../AccountSection\";
+} from "../accountStyles";
+import { AccountSection } from "../AccountSection";
 
-export const dynamic = \"force-dynamic\";\n\nconst MODEL_API_KEY_FIELDS = [\n    {\n        provider: \"claude\",\n        label: \"Anthropic (Claude) API Key\",\n        placeholder: \"sk-ant-...\",\n    },\n    {\n        provider: \"gemini\",\n        label: \"Google (Gemini) API Key\",\n        placeholder: \"AI...\",\n    },\n    {\n        provider: \"openai\",\n        label: \"OpenAI API Key\",\n        placeholder: \"sk-...\",\n    },\n    {\n        provider: \"openrouter\",\n        label: \"OpenRouter API Key\",\n        placeholder: \"sk-or-...\",\n    },\n] as const;\n\nconst OTHER_API_KEY_FIELDS = [\n    {\n        provider: \"courtlistener\",\n        label: \"CourtListener API Key\",\n        placeholder: \"Token...\",\n        description:\n            \"Add a CourtListener API key if you want the latest CourtListener data. Otherwise, Mike will use the bulk data hosted by us.\",\n    },\n] as const;\n\nexport default function ApiKeysPage() {\n    const { profile, updateApiKey } = useUserProfile();\n\n    return (\n        <div>\n            <h2 className=\"mb-3 text-2xl font-medium font-serif text-gray-900\">\n                API Keys\n            </h2>\n            <p className=\"text-sm text-gray-500 mb-4\">\n                You must provide your own API keys for the app to work or add\n                your API keys into the .env file if you are running your own\n                instance of Mike. All API keys are encrypted in storage.\n            </p>\n            <AccountSection>\n                {MODEL_API_KEY_FIELDS.map((field, index) => (\n                    <div key={field.provider}>\n                        <ApiKeyField\n                            label={field.label}\n                            placeholder={field.placeholder}\n                            hasSavedKey={\n                                !!profile?.apiKeys[field.provider].configured\n                            }\n                            isServerConfigured={\n                                profile?.apiKeys[field.provider].source ===\n                                \"env\"\n                            }\n                            onSave={(value) =>\n                                updateApiKey(\n                                    field.provider,\n                                    value.trim() || null,\n                                )\n                            }\n                            onRemove={() => updateApiKey(field.provider, null)}\n                        />\n                        {index < MODEL_API_KEY_FIELDS.length - 1 && (\n                            <div className=\"mx-4 h-px bg-gray-200\" />\n                        )}\n                    </div>\n                ))}\n            </AccountSection>\n\n            <AccountSection className=\"mt-8\">\n                {OTHER_API_KEY_FIELDS.map((field) => (\n                    <ApiKeyField\n                        key={field.provider}\n                        label={field.label}\n                        description={field.description}\n                        placeholder={field.placeholder}\n                        hasSavedKey={\n                            !!profile?.apiKeys[field.provider].configured\n                        }\n                        isServerConfigured={\n                            profile?.apiKeys[field.provider].source === \"env\"\n                        }\n                        onSave={(value) =>\n                            updateApiKey(field.provider, value.trim() || null)\n                        }\n                        onRemove={() => updateApiKey(field.provider, null)}\n                    />\n                ))}\n            </AccountSection>\n        </div>\n    );\n}\n\nfunction ApiKeyField({\n    label,\n    description,\n    placeholder,\n    hasSavedKey,\n    isServerConfigured,\n    onSave,\n    onRemove,\n}: {\n    label: string;\n    description?: string;\n    placeholder: string;\n    hasSavedKey: boolean;\n    isServerConfigured: boolean;\n    onSave: (value: string) => Promise<boolean>;\n    onRemove: () => Promise<boolean>;\n}) {\n    const [value, setValue] = useState(\"\");\n    const [reveal, setReveal] = useState(false);\n    const [isSaving, setIsSaving] = useState(false);\n    const [saved, setSaved] = useState(false);\n    const [pendingMfaAction, setPendingMfaAction] = useState<\n        \"save\" | \"remove\" | null\n    >(null);\n\n    useEffect(() => {\n        setValue(\"\");\n    }, [hasSavedKey]);\n\n    const dirty = value.trim().length > 0;\n\n    const handleSave = async () => {\n        setIsSaving(true);\n        try {\n            if (await needsMfaVerification()) {\n                setPendingMfaAction(\"save\");\n                return;\n            }\n            const ok = await onSave(value);\n            if (ok) {\n                setValue(\"\");\n                setSaved(true);\n                setTimeout(() => setSaved(false), 2000);\n            } else {\n                alert(`Failed to save ${label}.`);\n            }\n        } catch (error) {\n            if (isMfaRequiredError(error)) {\n                setPendingMfaAction(\"save\");\n            } else {\n                alert(`Failed to save ${label}.`);\n            }\n        } finally {\n            setIsSaving(false);\n        }\n    };\n\n    const handleRemove = async () => {\n        setIsSaving(true);\n        try {\n            if (await needsMfaVerification()) {\n                setPendingMfaAction(\"remove\");\n                return;\n            }\n            const ok = await onRemove();\n            if (!ok) alert(`Failed to remove ${label}.`);\n        } catch (error) {\n            if (isMfaRequiredError(error)) {\n                setPendingMfaAction(\"remove\");\n            } else {\n                alert(`Failed to remove ${label}.`);\n            }\n        } finally {\n            setIsSaving(false);\n        }\n    };\n\n    const handleMfaVerified = async () => {\n        const action = pendingMfaAction;\n        setPendingMfaAction(null);\n        if (action === \"save\") {\n            await handleSave();\n        } else if (action === \"remove\") {\n            await handleRemove();\n        }\n    };\n\n    return (\n        <>\n            <div className=\"px-4 py-5\">\n                <label className=\"text-sm font-medium text-gray-700 block mb-2\">\n                    {label}\n                </label>\n                {description && (\n                    <p className=\"text-sm text-gray-500 mb-3\">{description}</p>\n                )}\n                <div className=\"space-y-2\">\n                    <div className=\"relative flex-1\">\n                        <Input\n                            type={reveal ? \"text\" : \"password\"}\n                            value={value}\n                            onChange={(e) => setValue(e.target.value)}\n                            placeholder={\n                                isServerConfigured\n                                    ? \"Server .env key configured\"\n                                    : hasSavedKey\n                                      ? \"Saved key hidden\"\n                                      : placeholder\n                            }\n                            className={`pr-10 ${accountGlassInputClassName}`}\n                            autoComplete=\"off\"\n                            spellCheck={false}\n                            disabled={isServerConfigured}\n                        />\n                        {dirty && (\n                            <button\n                                type=\"button\"\n                                onClick={() => setReveal((r) => !r)}\n                                disabled={isServerConfigured}\n                                className={`absolute inset-y-1 right-1.5 flex items-center ${accountGlassIconButtonClassName}`}\n                                aria-label={reveal ? \"Hide key\" : \"Show key\"}\n                            >\n                                {reveal ? (\n                                    <EyeOff className=\"h-4 w-4\" />\n                                ) : (\n                                    <Eye className=\"h-4 w-4\" />\n                                )}\n                            </button>\n                        )}\n                    </div>\n                    <div className=\"flex flex-wrap justify-end gap-2\">\n                        <button\n                            type=\"button\"\n                            onClick={handleSave}\n                            disabled={\n                                isServerConfigured ||\n                                isSaving ||\n                                !dirty ||\n                                saved\n                            }\n                            className=\"text-xs font-medium text-gray-700 transition-colors hover:text-gray-950 disabled:cursor-not-allowed disabled:text-gray-400\"\n                        >\n                            {isSaving ? (\n                                \"Saving...\"\n                            ) : saved ? (\n                                \"Saved\"\n                            ) : (\n                                \"Save\"\n                            )}\n                        </button>\n                        {hasSavedKey && !isServerConfigured && (\n                            <button\n                                type=\"button\"\n                                onClick={handleRemove}\n                                disabled={isSaving}\n                                className=\"text-xs font-medium text-red-600 transition-colors hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-300\"\n                            >\n                                Remove\n                            </button>\n                        )}\n                    </div>\n                </div>\n            </div>\n            <MfaVerificationPopup\n                open={!!pendingMfaAction}\n                onCancel={() => setPendingMfaAction(null)}\n                onVerified={() => void handleMfaVerified()}\n            />\n        </>\n    );\n}\n
+export const dynamic = "force-dynamic";
+
+const MODEL_API_KEY_FIELDS = [
+    {
+        provider: "claude",
+        label: "Anthropic (Claude) API Key",
+        placeholder: "sk-ant-...",
+    },
+    {
+        provider: "gemini",
+        label: "Google (Gemini) API Key",
+        placeholder: "AI...",
+    },
+    {
+        provider: "openai",
+        label: "OpenAI API Key",
+        placeholder: "sk-...",
+    },
+    {
+        provider: "openrouter",
+        label: "OpenRouter API Key",
+        placeholder: "sk-or-...",
+    },
+] as const;
+
+const OTHER_API_KEY_FIELDS = [
+    {
+        provider: "courtlistener",
+        label: "CourtListener API Key",
+        placeholder: "Token...",
+        description:
+            "Add a CourtListener API key if you want the latest CourtListener data. Otherwise, Mike will use the bulk data hosted by us.",
+    },
+] as const;
+
+export default function ApiKeysPage() {
+    const { profile, updateApiKey } = useUserProfile();
+
+    return (
+        <div>
+            <h2 className="mb-3 text-2xl font-medium font-serif text-gray-900">
+                API Keys
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+                You must provide your own API keys for the app to work or add
+                your API keys into the .env file if you are running your own
+                instance of Mike. All API keys are encrypted in storage.
+            </p>
+            <AccountSection>
+                {MODEL_API_KEY_FIELDS.map((field, index) => (
+                    <div key={field.provider}>
+                        <ApiKeyField
+                            label={field.label}
+                            placeholder={field.placeholder}
+                            hasSavedKey={
+                                !!profile?.apiKeys[field.provider].configured
+                            }
+                            isServerConfigured={
+                                profile?.apiKeys[field.provider].source ===
+                                "env"
+                            }
+                            onSave={(value) =>
+                                updateApiKey(
+                                    field.provider,
+                                    value.trim() || null,
+                                )
+                            }
+                            onRemove={() => updateApiKey(field.provider, null)}
+                        />
+                        {index < MODEL_API_KEY_FIELDS.length - 1 && (
+                            <div className="mx-4 h-px bg-gray-200" />
+                        )}
+                    </div>
+                ))}
+            </AccountSection>
+
+            <AccountSection className="mt-8">
+                {OTHER_API_KEY_FIELDS.map((field) => (
+                    <ApiKeyField
+                        key={field.provider}
+                        label={field.label}
+                        description={field.description}
+                        placeholder={field.placeholder}
+                        hasSavedKey={
+                            !!profile?.apiKeys[field.provider].configured
+                        }
+                        isServerConfigured={
+                            profile?.apiKeys[field.provider].source === "env"
+                        }
+                        onSave={(value) =>
+                            updateApiKey(field.provider, value.trim() || null)
+                        }
+                        onRemove={() => updateApiKey(field.provider, null)}
+                    />
+                ))}
+            </AccountSection>
+        </div>
+    );
+}
+
+function ApiKeyField({
+    label,
+    description,
+    placeholder,
+    hasSavedKey,
+    isServerConfigured,
+    onSave,
+    onRemove,
+}: {
+    label: string;
+    description?: string;
+    placeholder: string;
+    hasSavedKey: boolean;
+    isServerConfigured: boolean;
+    onSave: (value: string) => Promise<boolean>;
+    onRemove: () => Promise<boolean>;
+}) {
+    const [value, setValue] = useState("");
+    const [reveal, setReveal] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [pendingMfaAction, setPendingMfaAction] = useState<
+        "save" | "remove" | null
+    >(null);
+
+    useEffect(() => {
+        setValue("");
+    }, [hasSavedKey]);
+
+    const dirty = value.trim().length > 0;
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            if (await needsMfaVerification()) {
+                setPendingMfaAction("save");
+                return;
+            }
+            const ok = await onSave(value);
+            if (ok) {
+                setValue("");
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2000);
+            } else {
+                alert(`Failed to save ${label}.`);
+            }
+        } catch (error) {
+            if (isMfaRequiredError(error)) {
+                setPendingMfaAction("save");
+            } else {
+                alert(`Failed to save ${label}.`);
+            }
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleRemove = async () => {
+        setIsSaving(true);
+        try {
+            if (await needsMfaVerification()) {
+                setPendingMfaAction("remove");
+                return;
+            }
+            const ok = await onRemove();
+            if (!ok) alert(`Failed to remove ${label}.`);
+        } catch (error) {
+            if (isMfaRequiredError(error)) {
+                setPendingMfaAction("remove");
+            } else {
+                alert(`Failed to remove ${label}.`);
+            }
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleMfaVerified = async () => {
+        const action = pendingMfaAction;
+        setPendingMfaAction(null);
+        if (action === "save") {
+            await handleSave();
+        } else if (action === "remove") {
+            await handleRemove();
+        }
+    };
+
+    return (
+        <>
+            <div className="px-4 py-5">
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                    {label}
+                </label>
+                {description && (
+                    <p className="text-sm text-gray-500 mb-3">{description}</p>
+                )}
+                <div className="space-y-2">
+                    <div className="relative flex-1">
+                        <Input
+                            type={reveal ? "text" : "password"}
+                            value={value}
+                            onChange={(e) => setValue(e.target.value)}
+                            placeholder={
+                                isServerConfigured
+                                    ? "Server .env key configured"
+                                    : hasSavedKey
+                                      ? "Saved key hidden"
+                                      : placeholder
+                            }
+                            className={`pr-10 ${accountGlassInputClassName}`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            disabled={isServerConfigured}
+                        />
+                        {dirty && (
+                            <button
+                                type="button"
+                                onClick={() => setReveal((r) => !r)}
+                                disabled={isServerConfigured}
+                                className={`absolute inset-y-1 right-1.5 flex items-center ${accountGlassIconButtonClassName}`}
+                                aria-label={reveal ? "Hide key" : "Show key"}
+                            >
+                                {reveal ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={
+                                isServerConfigured ||
+                                isSaving ||
+                                !dirty ||
+                                saved
+                            }
+                            className="text-xs font-medium text-gray-700 transition-colors hover:text-gray-950 disabled:cursor-not-allowed disabled:text-gray-400"
+                        >
+                            {isSaving ? (
+                                "Saving..."
+                            ) : saved ? (
+                                "Saved"
+                            ) : (
+                                "Save"
+                            )}
+                        </button>
+                        {hasSavedKey && !isServerConfigured && (
+                            <button
+                                type="button"
+                                onClick={handleRemove}
+                                disabled={isSaving}
+                                className="text-xs font-medium text-red-600 transition-colors hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-300"
+                            >
+                                Remove
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+            <MfaVerificationPopup
+                open={!!pendingMfaAction}
+                onCancel={() => setPendingMfaAction(null)}
+                onVerified={() => void handleMfaVerified()}
+            />
+        </>
+    );
+}
