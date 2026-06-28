@@ -1,11 +1,111 @@
-\"use client\";
+"use client";
 
-import { useEffect } from \"react\";
-import { usePathname, useRouter } from \"next/navigation\";
-import { Loader2 } from \"lucide-react\";
-import { useAuth } from \"@/contexts/AuthContext\";
-import { accountTabButtonClassName } from \"./accountStyles\";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { accountTabButtonClassName } from "./accountStyles";
 
-export const dynamic = \"force-dynamic\";
+export const dynamic = "force-dynamic";
 
-interface TabDef {\n    id: string;\n    label: string;\n    href: string;\n}\n\nconst TABS: TabDef[] = [\n    { id: \"general\", label: \"General\", href: \"/account\" },\n    { id: \"features\", label: \"Features\", href: \"/account/features\" },\n    {\n        id: \"privacy-data\",\n        label: \"Privacy & Data\",\n        href: \"/account/privacy-data\",\n    },\n    { id: \"security\", label: \"Security\", href: \"/account/security\" },\n    { id: \"models\", label: \"Model Preferences\", href: \"/account/models\" },\n    { id: \"api-keys\", label: \"API Keys\", href: \"/account/api-keys\" },\n    { id: \"connectors\", label: \"Connectors\", href: \"/account/connectors\" },\n];\n\nexport default function AccountLayout({\n    children,\n}: {\n    children: React.ReactNode;\n}) {\n    const router = useRouter();\n    const pathname = usePathname();\n    const { isAuthenticated, authLoading } = useAuth();\n\n    useEffect(() => {\n        if (!authLoading && !isAuthenticated) {\n            router.push(\"/\");\n        }\n    }, [isAuthenticated, authLoading, router]);\n\n    if (authLoading) {\n        return (\n            <div className=\"h-dvh flex items-center justify-center\">\n                <Loader2 className=\"h-8 w-8 animate-spin text-blue-600\" />\n            </div>\n        );\n    }\n\n    if (!isAuthenticated) {\n        return null;\n    }\n\n    return (\n        <div className=\"flex h-full flex-col overflow-y-auto\">\n            <header className=\"mx-auto flex h-16 w-full max-w-5xl shrink-0 items-end px-6 pb-2 md:h-24 md:pb-4\">\n                <h1 className=\"text-4xl font-medium font-eb-garamond\">\n                    Settings\n                </h1>\n            </header>\n\n            <main className=\"mx-auto w-full max-w-5xl flex-1 px-6 pb-10 pt-4 md:pt-6\">\n                <div className=\"grid grid-cols-1 gap-y-6 md:grid-cols-[224px_minmax(0,1fr)] md:gap-x-10\">\n                    <nav\n                        aria-label=\"Settings\"\n                        className=\"z-10 -ml-3 min-w-0 self-start md:sticky md:top-4\"\n                    >\n                        <div className=\"-m-1 min-w-0 p-1\">\n                            <div className=\"-m-1 min-w-0 overflow-x-auto overflow-y-hidden p-1\">\n                                <ul className=\"mb-0 flex gap-1 md:flex-col\">\n                                    {TABS.map((tab) => {\n                                        const active =\n                                            pathname === tab.href ||\n                                            (tab.href !== \"/account\" &&\n                                                pathname.startsWith(tab.href));\n                                        return (\n                                            <li key={tab.id}>\n                                                <button\n                                                    type=\"button\"\n                                                    aria-current={\n                                                        active\n                                                            ? \"page\"\n                                                            : undefined\n                                                    }\n                                                    onClick={() =>\n                                                        router.push(tab.href)\n                                                    }\n                                                    className={accountTabButtonClassName(\n                                                        active,\n                                                    )}\n                                                >\n                                                    {tab.label}\n                                                </button>\n                                            </li>\n                                        );\n                                    })}\n                                </ul>\n                            </div>\n                        </div>\n                    </nav>\n\n                    <div className=\"min-w-0 outline-none\">{children}</div>\n                </div>\n            </main>\n        </div>\n    );\n}\n
+interface TabDef {
+    id: string;
+    label: string;
+    href: string;
+}
+
+const TABS: TabDef[] = [
+    { id: "general", label: "General", href: "/account" },
+    { id: "features", label: "Features", href: "/account/features" },
+    {
+        id: "privacy-data",
+        label: "Privacy & Data",
+        href: "/account/privacy-data",
+    },
+    { id: "security", label: "Security", href: "/account/security" },
+    { id: "models", label: "Model Preferences", href: "/account/models" },
+    { id: "api-keys", label: "API Keys", href: "/account/api-keys" },
+    { id: "connectors", label: "Connectors", href: "/account/connectors" },
+];
+
+export default function AccountLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const { isAuthenticated, authLoading } = useAuth();
+
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) {
+            router.push("/");
+        }
+    }, [isAuthenticated, authLoading, router]);
+
+    if (authLoading) {
+        return (
+            <div className="h-dvh flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return null;
+    }
+
+    return (
+        <div className="flex h-full flex-col overflow-y-auto">
+            <header className="mx-auto flex h-16 w-full max-w-5xl shrink-0 items-end px-6 pb-2 md:h-24 md:pb-4">
+                <h1 className="text-4xl font-medium font-eb-garamond">
+                    Settings
+                </h1>
+            </header>
+
+            <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-10 pt-4 md:pt-6">
+                <div className="grid grid-cols-1 gap-y-6 md:grid-cols-[224px_minmax(0,1fr)] md:gap-x-10">
+                    <nav
+                        aria-label="Settings"
+                        className="z-10 -ml-3 min-w-0 self-start md:sticky md:top-4"
+                    >
+                        <div className="-m-1 min-w-0 p-1">
+                            <div className="-m-1 min-w-0 overflow-x-auto overflow-y-hidden p-1">
+                                <ul className="mb-0 flex gap-1 md:flex-col">
+                                    {TABS.map((tab) => {
+                                        const active =
+                                            pathname === tab.href ||
+                                            (tab.href !== "/account" &&
+                                                pathname.startsWith(tab.href));
+                                        return (
+                                            <li key={tab.id}>
+                                                <button
+                                                    type="button"
+                                                    aria-current={
+                                                        active
+                                                            ? "page"
+                                                            : undefined
+                                                    }
+                                                    onClick={() =>
+                                                        router.push(tab.href)
+                                                    }
+                                                    className={accountTabButtonClassName(
+                                                        active,
+                                                    )}
+                                                >
+                                                    {tab.label}
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <div className="min-w-0 outline-none">{children}</div>
+                </div>
+            </main>
+        </div>
+    );
+}
